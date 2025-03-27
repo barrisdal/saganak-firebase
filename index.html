@@ -1,0 +1,51 @@
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Sahne Uygulaması</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            margin: 20px;
+            background-color: #f4f4f4;
+        }
+        #songsList {
+            list-style-type: none;
+            padding: 0;
+        }
+        #songsList li {
+            cursor: pointer;
+            padding: 10px;
+            border-bottom: 1px solid #ddd;
+            background-color: #fff;
+            margin-bottom: 5px;
+        }
+        #songsList li:hover {
+            background-color: #e9e9e9;
+        }
+        #songHtmlContainer {
+            margin-top: 20px;
+            padding: 10px;
+            border: 1px solid #ccc;
+            background-color: #fff;
+        }
+        h1 {
+            color: #333;
+        }
+    </style>
+
+    <!-- Firebase SDK'sını ekleyin -->
+    <script src="https://www.gstatic.com/firebasejs/9.VERSION.X/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/9.VERSION.X/firebase-database-compat.js"></script>
+</head>
+<body>
+    <h1>Şarkı Listesi</h1>
+    <ul id="songsList"></ul>
+    <div id="songHtmlContainer">
+        <!-- Şarkı HTML içeriği buraya yüklenecek -->
+    </div>
+
+    <script src="script.js"></script>
+</body>
+</html>
