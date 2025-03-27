@@ -1,51 +1,106 @@
 <!DOCTYPE html>
 <html lang="tr">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Sahne Uygulaması</title>
-    <style>
-        body {
-            font-family: Arial, sans-serif;
-            margin: 20px;
-            background-color: #f4f4f4;
-        }
-        select {
-            padding: 10px;
-            font-size: 16px;
-            width: 100%;
-            margin-bottom: 20px;
-            border-radius: 5px;
-            border: 1px solid #ccc;
-        }
-        #songHtmlContainer {
-            margin-top: 20px;
-            padding: 10px;
-            border: 1px solid #ccc;
-            background-color: #fff;
-        }
-        h1 {
-            color: #333;
-        }
-    </style>
-
-    <!-- Firebase SDK'sını ekleyin -->
-    <script src="https://www.gstatic.com/firebasejs/9.6.1/firebase-app-compat.js"></script>
-    <script src="https://www.gstatic.com/firebasejs/9.6.1/firebase-database-compat.js"></script>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Sahne Uygulaması</title>
+  <style>
+    body {
+      font-family: Arial, sans-serif;
+      margin: 20px;
+      background-color: #f4f4f4;
+    }
+    #songsList {
+      list-style-type: none;
+      padding: 0;
+    }
+    #songsList li {
+      cursor: pointer;
+      padding: 10px;
+      border-bottom: 1px solid #ddd;
+      background-color: #fff;
+      margin-bottom: 5px;
+    }
+    #songsList li:hover {
+      background-color: #e9e9e9;
+    }
+    #songHtmlContainer {
+      margin-top: 20px;
+      padding: 10px;
+      border: 1px solid #ccc;
+      background-color: #fff;
+    }
+    h1 {
+      color: #333;
+    }
+  </style>
 </head>
 <body>
-    <h1>Şarkı Listesi</h1>
-    
-    <!-- Açılır Menü -->
-    <select id="songsDropdown" onchange="showSongHtml(this.value)">
-        <option value="">Bir şarkı seçin</option>
-    </select>
+  <h1>Şarkı Listesi</h1>
+  <ul id="songsList"></ul>
+  <div id="songHtmlContainer">
+    <!-- Şarkı HTML içeriği buraya yüklenecek -->
+  </div>
 
-    <div id="songHtmlContainer">
-        <!-- Şarkı HTML içeriği buraya yüklenecek -->
-    </div>
+  <!-- Firebase SDK'sını ekleyin -->
+  <script type="module">
+    import { initializeApp } from "https://www.gstatic.com/firebasejs/11.5.0/firebase-app.js";
+    import { getDatabase, ref, get, child } from "https://www.gstatic.com/firebasejs/11.5.0/firebase-database.js";
 
-    <!-- Script dosyasını dahil et -->
-    <script src="script.js"></script>
+    // Firebase yapılandırması
+    const firebaseConfig = {
+      apiKey: "AIzaSyDAhFPe_j750iRzfv96xHAMX488sj6xBTs",
+      authDomain: "saganak-24ec8.firebaseapp.com",
+      databaseURL: "https://saganak-24ec8-default-rtdb.europe-west1.firebasedatabase.app",
+      projectId: "saganak-24ec8",
+      storageBucket: "saganak-24ec8.firebasestorage.app",
+      messagingSenderId: "394236997954",
+      appId: "1:394236997954:web:50917497818fe1761b98db",
+      measurementId: "G-87BQBF6BJ1"
+    };
+
+    // Firebase'i başlat
+    const app = initializeApp(firebaseConfig);
+    const db = getDatabase(app);
+
+    // Şarkı listesini al
+    function getSongs() {
+      const dbRef = ref(db, 'songs');
+      get(dbRef).then((snapshot) => {
+        if (snapshot.exists()) {
+          const songsData = snapshot.val();
+          displaySongs(songsData);
+        } else {
+          console.log("Veri bulunamadı.");
+        }
+      }).catch((error) => {
+        console.error("Veri çekme hatası: " + error);
+      });
+    }
+
+    // Şarkı listesini görüntüle
+    function displaySongs(songs) {
+      const songsList = document.getElementById("songsList");
+      songsList.innerHTML = '';  // Mevcut listeyi temizle
+      for (const songId in songs) {
+        const song = songs[songId];
+        const li = document.createElement("li");
+        li.textContent = song.Name;
+        li.onclick = function() {
+          showSongHtml(song.Html);
+        };
+        songsList.appendChild(li);
+      }
+    }
+
+    // Şarkı içeriğini göster
+    function showSongHtml(htmlContent) {
+      const songHtmlContainer = document.getElementById("songHtmlContainer");
+      songHtmlContainer.innerHTML = htmlContent;
+    }
+
+    // Şarkıları al ve listele
+    getSongs();
+  </script>
 </body>
 </html>
