@@ -5,37 +5,9 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Sahne Uygulaması</title>
     <style>
-        body {
-            font-family: Arial, sans-serif;
-            margin: 20px;
-            background-color: #f4f4f4;
-        }
-        #songsList {
-            list-style-type: none;
-            padding: 0;
-        }
-        #songsList li {
-            cursor: pointer;
-            padding: 10px;
-            border-bottom: 1px solid #ddd;
-            background-color: #fff;
-            margin-bottom: 5px;
-        }
-        #songsList li:hover {
-            background-color: #e9e9e9;
-        }
-        #songHtmlContainer {
-            margin-top: 20px;
-            padding: 10px;
-            border: 1px solid #ccc;
-            background-color: #fff;
-        }
-        h1 {
-            color: #333;
-        }
+        /* Stil kısmı burada kalabilir */
     </style>
-
-    <!-- Firebase SDK'sını ekleyin -->
+    <!-- Firebase SDK'lerini ekleyin -->
     <script src="https://www.gstatic.com/firebasejs/9.x.x/firebase-app.js"></script>
     <script src="https://www.gstatic.com/firebasejs/9.x.x/firebase-database.js"></script>
 </head>
@@ -47,7 +19,6 @@
     </div>
 
     <script>
-        // Firebase yapılandırma bilgileri
         const firebaseConfig = {
             apiKey: "AIzaSyDAhFPe_j750iRzfv96xHAMX488sj6xBTs",
             authDomain: "saganak-24ec8.firebaseapp.com",
@@ -59,37 +30,46 @@
             measurementId: "G-S1C78RYR9Z"
         };
 
-        // Firebase'i başlat
         const app = firebase.initializeApp(firebaseConfig);
         const database = firebase.database();
 
         // Şarkı listesini çek
-        const songsRef = database.ref('songs'); // 'songs' nodu, veritabanında şarkılar için kullandığınız referans
+        const songsRef = database.ref('songs');
         songsRef.on('value', function(snapshot) {
             const songs = snapshot.val();
             const songsList = document.getElementById("songsList");
-            songsList.innerHTML = ""; // Listeyi sıfırlayın
+            songsList.innerHTML = "";
 
             // Şarkıları listeye ekle
             for (let songId in songs) {
                 let li = document.createElement("li");
-                li.textContent = songs[songId].Name;  // Şarkının adını listeye ekleyin
-                li.onclick = () => loadSongDetails(songId);
+                li.textContent = songs[songId].Name;
+                li.onclick = () => selectSong(songId);
                 songsList.appendChild(li);
             }
         });
 
-        // Şarkı detaylarını yükle
+        // Şarkı seçildiğinde, Firebase'e kaydet
+        function selectSong(songId) {
+            const currentSongRef = database.ref('currentSong');
+            currentSongRef.set(songId);  // Şu anki şarkıyı Firebase'e kaydediyoruz
+        }
+
+        // Şu anki şarkıyı dinle ve her iki cihazda da göster
+        const currentSongRef = database.ref('currentSong');
+        currentSongRef.on('value', function(snapshot) {
+            const songId = snapshot.val();
+            loadSongDetails(songId);  // Şarkı detaylarını yükle
+        });
+
         function loadSongDetails(songId) {
             const songRef = database.ref('songs/' + songId);
             songRef.once('value', function(snapshot) {
                 const songData = snapshot.val();
                 const songHtmlContainer = document.getElementById("songHtmlContainer");
-                songHtmlContainer.innerHTML = songData.Html;  // Şarkı HTML içeriğini yükleyin
+                songHtmlContainer.innerHTML = songData.Html;
             });
         }
     </script>
-
-    <script src="script.js"></script>
 </body>
 </html>
