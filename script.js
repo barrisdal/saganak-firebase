@@ -17,7 +17,7 @@ firebase.initializeApp(firebaseConfig);
 const database = firebase.database();
 
 // Şarkı listesi ve içerik konteynerleri
-const songsList = document.getElementById('songsList');
+const songsDropdown = document.getElementById('songsDropdown');
 const songHtmlContainer = document.getElementById('songHtmlContainer');
 
 // Şarkı listesini Firebase'den çekme
@@ -25,27 +25,42 @@ function getSongs() {
   const songsRef = database.ref('songs'); // Firebase'deki songs veritabanı
   songsRef.on('value', (snapshot) => {
     const songsData = snapshot.val(); // Veriyi al
-    displaySongs(songsData); // Şarkıları ekrana yazdır
+    displaySongs(songsData); // Şarkıları dropdown'a ekle
   });
 }
 
-// Şarkı listelerini ekrana yazdırma
+// Şarkı listelerini açılır menüye yazdırma
 function displaySongs(songsData) {
-  songsList.innerHTML = ''; // Önceki listeyi temizle
+  // Dropdown menüsünü temizle
+  songsDropdown.innerHTML = '<option value="">Bir şarkı seçin</option>';
+
   for (const key in songsData) {
     if (songsData.hasOwnProperty(key)) {
       const song = songsData[key];
-      const songItem = document.createElement('li');
-      songItem.textContent = song.Name;
-      songItem.onclick = () => showSongHtml(song.Html); // Şarkı tıklandığında içerik göster
-      songsList.appendChild(songItem);
+      const option = document.createElement('option');
+      option.value = key; // songId'yi değeri olarak ayarla
+      option.textContent = song.Name; // Şarkı adını metin olarak ayarla
+      songsDropdown.appendChild(option);
     }
   }
 }
 
 // Şarkı içeriğini ekrana yazdırma
-function showSongHtml(htmlContent) {
-  songHtmlContainer.innerHTML = htmlContent;
+function showSongHtml(songId) {
+  if (!songId) {
+    songHtmlContainer.innerHTML = ''; // Şarkı seçilmediyse içeriği temizle
+    return;
+  }
+
+  const songRef = database.ref('songs/' + songId);
+  songRef.once('value', (snapshot) => {
+    const song = snapshot.val();
+    if (song && song.Html) {
+      songHtmlContainer.innerHTML = song.Html; // HTML içeriğini göster
+    } else {
+      songHtmlContainer.innerHTML = '<p>Şarkı içeriği bulunamadı.</p>';
+    }
+  });
 }
 
 // Sayfa yüklendiğinde şarkıları çek
