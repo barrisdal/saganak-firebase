@@ -10,19 +10,14 @@
             margin: 20px;
             background-color: #f4f4f4;
         }
-        #songsList {
-            list-style-type: none;
-            padding: 0;
-        }
-        #songsList li {
-            cursor: pointer;
+        select {
             padding: 10px;
-            border-bottom: 1px solid #ddd;
+            width: 100%;
+            font-size: 16px;
             background-color: #fff;
-            margin-bottom: 5px;
-        }
-        #songsList li:hover {
-            background-color: #e9e9e9;
+            border: 1px solid #ddd;
+            border-radius: 5px;
+            margin-bottom: 20px;
         }
         #songHtmlContainer {
             margin-top: 20px;
@@ -41,7 +36,9 @@
 </head>
 <body>
     <h1>Şarkı Listesi</h1>
-    <ul id="songsList"></ul>
+    <select id="songsDropdown">
+        <option value="" disabled selected>Bir şarkı seçin</option>
+    </select>
     <div id="songHtmlContainer">
         <!-- Şarkı HTML içeriği buraya yüklenecek -->
     </div>
@@ -67,18 +64,25 @@
         const songsRef = database.ref('Songs'); // 'Songs' veritabanındaki anahtar
         songsRef.once('value', (snapshot) => {
             const songs = snapshot.val();
-            const songsList = document.getElementById('songsList');
-            songsList.innerHTML = ''; // Eski verileri temizle
+            const songsDropdown = document.getElementById('songsDropdown');
+            
+            // Dropdown menüsünü temizle
+            songsDropdown.innerHTML = '<option value="" disabled selected>Bir şarkı seçin</option>';
 
             for (const songId in songs) {
                 const song = songs[songId];
-                const songItem = document.createElement('li');
-                songItem.textContent = song.Name; // Şarkının adı
-                songItem.onclick = () => {
-                    document.getElementById('songHtmlContainer').innerHTML = song.Html; // Şarkının HTML içeriği
-                };
-                songsList.appendChild(songItem);
+                const option = document.createElement('option');
+                option.value = songId;
+                option.textContent = song.Name; // Şarkının adı
+                songsDropdown.appendChild(option);
             }
+
+            // Şarkı seçildiğinde içeriği göster
+            songsDropdown.addEventListener('change', (event) => {
+                const selectedSongId = event.target.value;
+                const selectedSong = songs[selectedSongId];
+                document.getElementById('songHtmlContainer').innerHTML = selectedSong.Html; // Şarkının HTML içeriği
+            });
         });
     </script>
 </body>
