@@ -1,67 +1,95 @@
-// Firebase'i başlat
+// Firebase yapılandırması
 const firebaseConfig = {
-  apiKey: "AIzaSyDAhFPe_j750iRzfv96xHAMX488sj6xBTs",
-  authDomain: "saganak-24ec8.firebaseapp.com",
-  databaseURL: "https://saganak-24ec8-default-rtdb.europe-west1.firebasedatabase.app",
-  projectId: "saganak-24ec8",
-  storageBucket: "saganak-24ec8.firebasestorage.app",
-  messagingSenderId: "394236997954",
-  appId: "1:394236997954:web:c49ebc99d98722e31b98db",
-  measurementId: "G-S1C78RYR9Z"
+    apiKey: "AIzaSyDAhFPe_j750iRzfv96xHAMX488sj6xBTs",
+    authDomain: "saganak-24ec8.firebaseapp.com",
+    databaseURL: "https://saganak-24ec8-default-rtdb.europe-west1.firebasedatabase.app",
+    projectId: "saganak-24ec8",
+    storageBucket: "saganak-24ec8.firebasestorage.app",
+    messagingSenderId: "394236997954",
+    appId: "1:394236997954:web:c49ebc99d98722e31b98db",
+    measurementId: "G-S1C78RYR9Z"
 };
 
-// Firebase'i başlatmak
-firebase.initializeApp(firebaseConfig);
-
-// Database referansı
+// Firebase'i başlat
+const app = firebase.initializeApp(firebaseConfig);
 const database = firebase.database();
 
-// Şarkı listesi ve içerik konteynerleri
-const songsDropdown = document.getElementById('songsDropdown');
-const songHtmlContainer = document.getElementById('songHtmlContainer');
+const songsRef = database.ref('Songs');
+const selectedSongRef = database.ref('selectedSong');
+const transposedSongRef = database.ref('transposedSong'); // Transpoze edilen şarkı
 
-// Şarkı listesini Firebase'den çekme
+const chords = ['A', 'A#', 'B', 'C', 'C#', 'D', 'D#', 'E', 'F', 'F#', 'G', 'G#'];
+
+let currentSongHtml = "";
+let currentSongId = "";
+
+// Akorları ton olarak transpoze etme fonksiyonu
+function transposeChord(chord, steps) {
+    const index = chords.indexOf(chord);
+    if (index === -1) return chord;
+    const newIndex = (index + steps + chords.length) % chords.length;
+    return chords[newIndex];
+}
+
+// Şarkı HTML içeriğindeki akorları transpoze etme fonksiyonu
+function transposeSong(songHtml, steps) {
+    const chordRegex = /\b(A|A#|B|C|C#|D|D#|E|F|F#|G|G#)\b/g;
+    return songHtml.replace(chordRegex, (match) => {
+        return transposeChord(match, steps);
+    });
+}
+
+// Firebase'den şarkıları al
 function getSongs() {
-  const songsRef = database.ref('songs'); // Firebase'deki songs veritabanı
-  songsRef.on('value', (snapshot) => {
-    const songsData = snapshot.val(); // Veriyi al
-    displaySongs(songsData); // Şarkıları dropdown'a ekle
-  });
+    songsRef.once('value', (snapshot) => {
+        const songs = snapshot.val();
+        const songsDropdown = document.getElementById('songsDropdown');
+        songsDropdown.innerHTML = '<option value="" disabled selected>Bir şarkı seçin</option>';
+
+        for (const songId in songs) {
+            const song = songs[songId];
+            const option = document.createElement('option');
+            option.value = songId;
+            option.textContent = song.Name;
+            songsDropdown.appendChild(option);
+        }
+    });
 }
 
-// Şarkı listelerini açılır menüye yazdırma
-function displaySongs(songsData) {
-  // Dropdown menüsünü temizle
-  songsDropdown.innerHTML = '<option value="">Bir şarkı seçin</option>';
+// Şarkı seçildiğinde işlemleri başlat
+document.getElementById('songsDropdown').addEventListener('change', (event) => {
+    currentSongId = event.target.value;
+    selectedSongRef.set(currentSongId);
+});
 
-  for (const key in songsData) {
-    if (songsData.hasOwnProperty(key)) {
-      const song = songsData[key];
-      const option = document.createElement('option');
-      option.value = key; // songId'yi değeri olarak ayarla
-      option.textContent = song.Name; // Şarkı adını metin olarak ayarla
-      songsDropdown.appendChild(option);
-    }
-  }
-}
+// Firebase'deki seçilen şarkıyı al
+selectedSongRef.on('value', (snapshot) => {
+    const selectedSongId = snapshot.val();
+    const songRef = database.ref('Songs/' + selectedSongId);
+    songRef.once('value', (songSnapshot) => {
+        const song = songSnapshot.val();
+        currentSongHtml = song.Html;
+        document.getElementById('songHtmlContainer').innerHTML = song.Html;
+    });
+});
 
-// Şarkı içeriğini ekrana yazdırma
-function showSongHtml(songId) {
-  if (!songId) {
-    songHtmlContainer.innerHTML = ''; // Şarkı seçilmediyse içeriği temizle
-    return;
-  }
+// Ton yukarı butonuna tıklanması
+document.getElementById('transposeUpButton').addEventListener('click', () => {
+    currentSongHtml = transposeSong(currentSongHtml, 1);
+    document.getElementById('songHtmlContainer').innerHTML = currentSongHtml;
+});
 
-  const songRef = database.ref('songs/' + songId);
-  songRef.once('value', (snapshot) => {
-    const song = snapshot.val();
-    if (song && song.Html) {
-      songHtmlContainer.innerHTML = song.Html; // HTML içeriğini göster
-    } else {
-      songHtmlContainer.innerHTML = '<p>Şarkı içeriği bulunamadı.</p>';
-    }
-  });
-}
+// Ton aşağı butonuna tıklanması
+document.getElementById('transposeDownButton').addEventListener('click', () => {
+    currentSongHtml = transposeSong(currentSongHtml, -1);
+    document.getElementById('songHtmlContainer').innerHTML = currentSongHtml;
+});
+
+// Kaydetme butonuna tıklanması
+document.getElementById('saveButton').addEventListener('click', () => {
+    transposedSongRef.set(currentSongHtml);
+    alert('Şarkı kaydedildi!');
+});
 
 // Sayfa yüklendiğinde şarkıları çek
 getSongs();
