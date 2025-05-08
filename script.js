@@ -65,3 +65,49 @@ function showSongHtml(songId) {
 
 // Sayfa yüklendiğinde şarkıları çek
 getSongs();
+
+const chords = ["C", "C#", "D", "D#", "E", "F", "F#", "G", "G#", "A", "A#", "B"];
+
+function transposeChord(chord, steps) {
+  let suffix = "";
+  const baseMatch = chord.match(/^([A-G][#b]?)(.*)$/);
+  if (!baseMatch) return chord;
+
+  const base = baseMatch[1];
+  suffix = baseMatch[2];
+
+  let index = chords.indexOf(base);
+  if (index === -1) return chord;
+
+  let newIndex = (index + steps + chords.length) % chords.length;
+  return chords[newIndex] + suffix;
+}
+
+function transposeLine(line, steps) {
+  return line.replace(/\b[A-G][#b]?m?(7)?\b/g, chord => transposeChord(chord, steps));
+}
+
+let originalSong = "";
+let transposedSong = "";
+
+function transposeSelectedSong(steps) {
+  const container = document.getElementById('songHtmlContainer');
+  if (!originalSong) originalSong = container.innerText;
+
+  const lines = originalSong.split('\n');
+  const newLines = lines.map(line => transposeLine(line, steps));
+  transposedSong = newLines.join('\n');
+  container.innerHTML = `<pre>${transposedSong}</pre>`;
+}
+
+function saveTransposedSong() {
+  const selectedSongId = document.getElementById('songsDropdown').value;
+  if (!selectedSongId || !transposedSong) return alert("Önce bir şarkı seçin ve transpoze edin.");
+
+  database.ref('Songs/' + selectedSongId).update({
+    Html: `<pre>${transposedSong}</pre>`
+  }).then(() => {
+    alert("Transpoze edilmiş şarkı kaydedildi.");
+  });
+}
+
