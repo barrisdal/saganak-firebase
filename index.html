@@ -1,108 +1,74 @@
 <!DOCTYPE html>
 <html lang="tr">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Grup Sağanak Setlist</title>
-    <style>
-        body {
-            font-family: Arial, sans-serif;
-            margin: 20px;
-            background-color: #f4f4f4;
-        }
-        select {
-            padding: 10px;
-            width: 100%;
-            font-size: 16px;
-            background-color: #fff;
-            border: 1px solid #ddd;
-            border-radius: 5px;
-            margin-bottom: 20px;
-        }
-        
-        #songHtmlContainer {
-            margin-top: 20px;
-            padding: 10px;
-            border: 1px solid #ccc;
-            background-color: #fff;
-        }
-        h1 {
-            color: #333;
-        }
-    </style>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Grup Sağanak Setlist</title>
+  <style>
+    body {
+      font-family: Arial, sans-serif;
+      margin: 20px;
+      background-color: #f4f4f4;
+    }
+    select {
+      padding: 10px;
+      width: 100%;
+      font-size: 16px;
+      background-color: #fff;
+      border: 1px solid #ddd;
+      border-radius: 5px;
+      margin-bottom: 20px;
+    }
+    #songHtmlContainer {
+      margin-top: 20px;
+      padding: 10px;
+      border: 1px solid #ccc;
+      background-color: #fff;
+      white-space: pre-wrap;
+    }
+    h1 {
+      color: #333;
+    }
+    .buttons {
+      display: flex;
+      gap: 10px;
+      margin-bottom: 20px;
+    }
+    button {
+      padding: 10px 15px;
+      font-size: 14px;
+      border-radius: 5px;
+      border: none;
+      background-color: #444;
+      color: #fff;
+      cursor: pointer;
+    }
+    button:hover {
+      background-color: #222;
+    }
+  </style>
 
-    <!-- Firebase SDK'sını ekleyin -->
-    <script src="https://www.gstatic.com/firebasejs/9.6.1/firebase-app-compat.js"></script>
-    <script src="https://www.gstatic.com/firebasejs/9.6.1/firebase-database-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/9.6.1/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/9.6.1/firebase-database-compat.js"></script>
 </head>
 <body>
-    <h1>Grup Sağanak Setlist⚡</h1>
-    <select id="songsDropdown">
-        <option value="" disabled selected>Bir şarkı seçin</option>
-    </select>
-    <div class="buttons">
-  <button onclick="transposeSelectedSong(-1)">♭ 1 Ses İncelt</button>
-  <button onclick="transposeSelectedSong(1)">♯ 1 Ses Kalınlaştır</button>
-  <button onclick="saveTransposedSong()">💾 Kaydet</button>
-</div>
+  <h1>Grup Sağanak Setlist⚡</h1>
 
-    <div id="songHtmlContainer">
-        <!-- Şarkı HTML içeriği buraya yüklenecek -->
-    </div>
+  <div class="buttons">
+    <button onclick="transpose(-1)">♭ 1 Ses İncel</button>
+    <button onclick="transpose(1)">♯ 1 Ses Kalınlaştır</button>
+    <button onclick="resetTranspose()">⟳ Sıfırla</button>
+    <button onclick="saveBestVersion()">💾 En İyiyi Kaydet</button>
+  </div>
 
-    <script>
-        // Firebase yapılandırmasını burada yerleştirin
-        const firebaseConfig = {
-            apiKey: "AIzaSyDAhFPe_j750iRzfv96xHAMX488sj6xBTs",
-            authDomain: "saganak-24ec8.firebaseapp.com",
-            databaseURL: "https://saganak-24ec8-default-rtdb.europe-west1.firebasedatabase.app",
-            projectId: "saganak-24ec8",
-            storageBucket: "saganak-24ec8.firebasestorage.app",
-            messagingSenderId: "394236997954",
-            appId: "1:394236997954:web:50917497818fe1761b98db",
-            measurementId: "G-87BQBF6BJ1"
-        };
+  <select id="songsDropdown">
+    <option value="" disabled selected>Bir şarkı seçin</option>
+  </select>
 
-        // Firebase'i başlat
-        const app = firebase.initializeApp(firebaseConfig);
-        const database = firebase.database();
+  <div id="songHtmlContainer">
+    <!-- Şarkı HTML içeriği buraya yüklenecek -->
+  </div>
 
-        const songsRef = database.ref('Songs');
-        const selectedSongRef = database.ref('selectedSong'); // Şarkı seçim bilgisi
-
-        // Şarkı listesini çekme ve dropdown'a ekleme
-        songsRef.once('value', (snapshot) => {
-            const songs = snapshot.val();
-            const songsDropdown = document.getElementById('songsDropdown');
-            
-            // Dropdown menüsünü temizle
-            songsDropdown.innerHTML = '<option value="" disabled selected>Bir şarkı seçin</option>';
-
-            for (const songId in songs) {
-                const song = songs[songId];
-                const option = document.createElement('option');
-                option.value = songId;
-                option.textContent = song.Name.replace(/<\/?[^>]+(>|$)/g, ""); // HTML etiketlerini temizle
-                songsDropdown.appendChild(option);
-            }
-        });
-
-        // Şarkı seçildiğinde veriyi Firebase'e kaydet
-        document.getElementById('songsDropdown').addEventListener('change', (event) => {
-            const selectedSongId = event.target.value;
-            selectedSongRef.set(selectedSongId); // Seçilen şarkıyı Firebase'e kaydet
-        });
-
-        // Firebase'deki selectedSong değişikliklerini izleme
-        selectedSongRef.on('value', (snapshot) => {
-            const selectedSongId = snapshot.val();
-
-            // Şarkı verilerini al
-            songsRef.child(selectedSongId).once('value', (songSnapshot) => {
-                const song = songSnapshot.val();
-                document.getElementById('songHtmlContainer').innerHTML = song.Html; // Şarkı HTML içeriğini göster
-            });
-        });
-    </script>
+  <script src="script.js"></script>
 </body>
 </html>
