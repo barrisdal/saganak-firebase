@@ -18,28 +18,25 @@ const songsRef = database.ref('Songs');
 const selectedSongRef = database.ref('selectedSong');
 const transposedSongRef = database.ref('transposedSong'); // Transpoze edilen şarkı
 
+// Akor dizisi ve transpoze fonksiyonu
 const chords = ['A', 'A#', 'B', 'C', 'C#', 'D', 'D#', 'E', 'F', 'F#', 'G', 'G#'];
 
-let currentSongHtml = "";
-let currentSongId = "";
-
-// Akorları ton olarak transpoze etme fonksiyonu
 function transposeChord(chord, steps) {
     const index = chords.indexOf(chord);
-    if (index === -1) return chord;
-    const newIndex = (index + steps + chords.length) % chords.length;
+    if (index === -1) return chord; // Akor geçerli değilse değişiklik yapma
+    const newIndex = (index + steps + chords.length) % chords.length; // +steps ile transpoze et
     return chords[newIndex];
 }
 
-// Şarkı HTML içeriğindeki akorları transpoze etme fonksiyonu
+// Şarkının HTML içeriğindeki akorları transpoze etme
 function transposeSong(songHtml, steps) {
-    const chordRegex = /\b(A|A#|B|C|C#|D|D#|E|F|F#|G|G#)\b/g;
+    const chordRegex = /\b(A|A#|B|C|C#|D|D#|E|F|F#|G|G#)\b/g; // Akorları bulmak için regex
     return songHtml.replace(chordRegex, (match) => {
         return transposeChord(match, steps);
     });
 }
 
-// Firebase'den şarkıları al
+// Firebase'den şarkı verisini çekme
 function getSongs() {
     songsRef.once('value', (snapshot) => {
         const songs = snapshot.val();
@@ -58,8 +55,8 @@ function getSongs() {
 
 // Şarkı seçildiğinde işlemleri başlat
 document.getElementById('songsDropdown').addEventListener('change', (event) => {
-    currentSongId = event.target.value;
-    selectedSongRef.set(currentSongId);
+    const selectedSongId = event.target.value;
+    selectedSongRef.set(selectedSongId);
 });
 
 // Firebase'deki seçilen şarkıyı al
