@@ -63,7 +63,8 @@ function showSongHtml(songId) {
   });
 }
 
-
+// Sayfa yüklendiğinde şarkıları çek
+getSongs();
 
 // Akor listesi ve transpozisyon fonksiyonu
 const chords = ['A', 'A#', 'B', 'C', 'C#', 'D', 'D#', 'E', 'F', 'F#', 'G', 'G#'];
