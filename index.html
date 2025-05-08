@@ -19,6 +19,7 @@
             border-radius: 5px;
             margin-bottom: 20px;
         }
+        
         #songHtmlContainer {
             margin-top: 20px;
             padding: 10px;
@@ -39,6 +40,12 @@
     <select id="songsDropdown">
         <option value="" disabled selected>Bir şarkı seçin</option>
     </select>
+    <div class="buttons">
+  <button onclick="transposeSelectedSong(-1)">♭ 1 Ses İncelt</button>
+  <button onclick="transposeSelectedSong(1)">♯ 1 Ses Kalınlaştır</button>
+  <button onclick="saveTransposedSong()">💾 Kaydet</button>
+</div>
+
     <div id="songHtmlContainer">
         <!-- Şarkı HTML içeriği buraya yüklenecek -->
     </div>
