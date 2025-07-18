@@ -81,6 +81,12 @@
     <button id="transposeDownButton">1 Ton Aşağı</button>
     <button id="saveButton">Şarkı Düzenlemeyi Kaydet</button>
 
+    <label for="selectedSongCategory">Seçili Şarkı Kategorisi:</label>
+    <select id="selectedSongCategory">
+      <option value="" disabled selected>Bir kategori seç</option>
+    </select>
+    <button id="updateSongCategoryButton">Kategoriyi Kaydet</button>
+
     <div id="songHtmlContainer" contenteditable="true"></div>
   </div>
 
@@ -119,8 +125,9 @@
     measurementId: "G-S1C78RYR9Z"
   };
 
-  const app = firebase.initializeApp(firebaseConfig);
+  firebase.initializeApp(firebaseConfig);
   const database = firebase.database();
+
   const categoriesRef = database.ref('Categories');
   const songsRef = database.ref('Songs');
   const currentSelectedSongRef = database.ref('CurrentSelectedSong');
@@ -137,33 +144,57 @@
   const addSongButton = document.getElementById('addSongButton');
   const newCategoryInput = document.getElementById('newCategoryInput');
   const addCategoryButton = document.getElementById('addCategoryButton');
+  const selectedSongCategory = document.getElementById('selectedSongCategory');
+  const updateSongCategoryButton = document.getElementById('updateSongCategoryButton');
 
   let currentSongId = null;
+  let currentSongData = null;
+
+  const rootNotes = ['C', 'C#', 'Db', 'D', 'D#', 'Eb', 'E', 'F', 'F#', 'Gb', 'G', 'G#', 'Ab', 'A', 'A#', 'Bb', 'B'];
+
+  function transposeRoot(root, steps) {
+    let index = rootNotes.indexOf(root);
+    if (index === -1) return root;
+    let newIndex = (index + steps) % rootNotes.length;
+    if (newIndex < 0) newIndex += rootNotes.length;
+    return rootNotes[newIndex];
+  }
+
+  function transposeChordFull(chord, steps) {
+    let parts = chord.split('/');
+    let base = parts[0];
+    let bass = parts[1] || '';
+    let match = base.match(/^([A-G][b#]?)(.*)$/);
+    if (!match) return chord;
+    let root = match[1];
+    let ext = match[2];
+    let newRoot = transposeRoot(root, steps);
+    let newBass = bass ? transposeRoot(bass, steps) : '';
+    return newBass ? `${newRoot}${ext}/${newBass}` : `${newRoot}${ext}`;
+  }
+
+  function transposeSongHtml(html, steps) {
+    return html.replace(/\b([A-G][b#]?(m|maj7|m7|7|sus2|sus4|dim|aug|add9|m7b5|6|9|11|13)?(\/[A-G][b#]?)?)\b/g, match => {
+      return transposeChordFull(match, steps);
+    });
+  }
+
+  let allCategories = {};
   let allSongs = {};
-
-  const chords = ['A', 'A#', 'B', 'C', 'C#', 'D', 'D#', 'E', 'F', 'F#', 'G', 'G#'];
-
-  function transposeChord(chord, steps) {
-    const index = chords.indexOf(chord);
-    if (index === -1) return chord;
-    let newIndex = (index + steps) % chords.length;
-    if (newIndex < 0) newIndex += chords.length;
-    return chords[newIndex];
-  }
-
-  function transposeSong(html, steps) {
-    return html.replace(/\b([A-G]#?)\b/g, match => transposeChord(match, steps));
-  }
 
   function loadCategories() {
     categoriesRef.on('value', snapshot => {
       const data = snapshot.val() || {};
+      allCategories = data;
       categoryFilter.innerHTML = '<option value="">Tüm Kategoriler</option>';
       newSongCategory.innerHTML = '<option value="" disabled selected>Kategori seçin</option>';
+      selectedSongCategory.innerHTML = '<option value="" disabled selected>Kategori seçin</option>';
+
       for (const key in data) {
         const catName = data[key];
         categoryFilter.innerHTML += `<option value="${catName}">${catName}</option>`;
         newSongCategory.innerHTML += `<option value="${catName}">${catName}</option>`;
+        selectedSongCategory.innerHTML += `<option value="${catName}">${catName}</option>`;
       }
     });
   }
@@ -182,26 +213,27 @@
     });
   }
 
-  // Şarkı seçilince CurrentSelectedSong'u güncelle
   songsDropdown.addEventListener('change', e => {
     const songId = e.target.value;
-    if (songId) {
-      currentSelectedSongRef.set(songId);
-    }
+    if (!songId) return;
+    currentSelectedSongRef.set(songId);
   });
 
-  // Her cihaz CurrentSelectedSong değişikliğini dinler
   currentSelectedSongRef.on('value', snapshot => {
     const songId = snapshot.val();
     if (!songId) return;
-    currentSongId = songId;
-    songsDropdown.value = songId;
 
     songsRef.child(songId).once('value').then(songSnap => {
       const song = songSnap.val();
       if (!song) return;
-      const titleHtml = `<h2 class="song-title">${song.Name}</h2>`;
-      songHtmlContainer.innerHTML = titleHtml + song.Html;
+      currentSongId = songId;
+      currentSongData = song;
+
+      songsDropdown.value = songId;
+
+      songHtmlContainer.innerHTML = `<h2 class="song-title">${song.Name}</h2>` + song.Html;
+
+      selectedSongCategory.value = song.Category || '';
     });
   });
 
@@ -213,28 +245,42 @@
     const name = newSongName.value.trim();
     const category = newSongCategory.value;
     const html = newSongHtml.value.trim();
+
     if (!name || !category || !html) {
-      alert("Tüm alanları doldurun!");
+      alert("Lütfen tüm alanları doldurun!");
       return;
     }
+
     const newSongKey = songsRef.push().key;
     songsRef.child(newSongKey).set({
       Name: name,
       Category: category,
-      Html: html
+      Html: `<h2 class="song-title">${name}</h2>\n${html}`
     }).then(() => {
-      alert("Şarkı eklendi!");
+      alert("Yeni şarkı eklendi!");
       newSongName.value = '';
+      newSongCategory.value = '';
       newSongHtml.value = '';
+    }).catch(e => {
+      alert("Hata oluştu: " + e.message);
     });
   });
 
   addCategoryButton.addEventListener('click', () => {
     const catName = newCategoryInput.value.trim();
-    if (!catName) return alert("Kategori boş olamaz!");
+    if (!catName) {
+      alert("Kategori adı boş olamaz!");
+      return;
+    }
+    if (Object.values(allCategories).includes(catName)) {
+      alert("Bu kategori zaten var!");
+      return;
+    }
     categoriesRef.push(catName).then(() => {
       alert("Kategori eklendi!");
       newCategoryInput.value = '';
+    }).catch(e => {
+      alert("Hata oluştu: " + e.message);
     });
   });
 
@@ -243,34 +289,44 @@
       alert("Önce bir şarkı seçin!");
       return;
     }
-    const editedHtml = songHtmlContainer.innerHTML.replace(/<h2 class="song-title">.*<\/h2>/, '').trim();
-    songsRef.child(currentSongId).update({
-      Html: editedHtml
-    }).then(() => {
-      alert("Kaydedildi!");
-    });
+    const editedHtml = songHtmlContainer.innerHTML.trim();
+    if (!editedHtml) {
+      alert("Şarkı içeriği boş olamaz!");
+      return;
+    }
+    songsRef.child(currentSongId).update({ Html: editedHtml })
+    .then(() => { alert("Şarkı güncellendi!"); })
+    .catch(e => { alert("Hata: " + e.message); });
   });
 
   transposeUpButton.addEventListener('click', () => {
-    if (!currentSongId) return;
-    let html = songHtmlContainer.innerHTML.replace(/<h2 class="song-title">.*<\/h2>/, '');
-    const newHtml = transposeSong(html, 1);
-    const titleHtml = `<h2 class="song-title">${allSongs[currentSongId].Name}</h2>`;
-    songHtmlContainer.innerHTML = titleHtml + newHtml;
+    if (!currentSongData) { alert("Önce bir şarkı seçin!"); return; }
+    songHtmlContainer.innerHTML = transposeSongHtml(songHtmlContainer.innerHTML, +1);
   });
 
   transposeDownButton.addEventListener('click', () => {
-    if (!currentSongId) return;
-    let html = songHtmlContainer.innerHTML.replace(/<h2 class="song-title">.*<\/h2>/, '');
-    const newHtml = transposeSong(html, -1);
-    const titleHtml = `<h2 class="song-title">${allSongs[currentSongId].Name}</h2>`;
-    songHtmlContainer.innerHTML = titleHtml + newHtml;
+    if (!currentSongData) { alert("Önce bir şarkı seçin!"); return; }
+    songHtmlContainer.innerHTML = transposeSongHtml(songHtmlContainer.innerHTML, -1);
+  });
+
+  updateSongCategoryButton.addEventListener('click', () => {
+    if (!currentSongId) {
+      alert("Önce bir şarkı seçin!");
+      return;
+    }
+    const selectedCategory = selectedSongCategory.value;
+    if (!selectedCategory) {
+      alert("Kategori seçin!");
+      return;
+    }
+    songsRef.child(currentSongId).update({ Category: selectedCategory })
+    .then(() => { alert("Kategori güncellendi!"); })
+    .catch(e => { alert("Hata: " + e.message); });
   });
 
   loadCategories();
   loadSongs();
 </script>
-
 
 </body>
 </html>
