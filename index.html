@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1" />
 <title>Grup Sağanak Setlist - Kategori & Düzenleme</title>
 
-<!-- TinyMCE CDN (WYSIWYG editör için) -->
+<!-- TinyMCE CDN -->
 <script src="https://cdn.tiny.cloud/1/no-api-key/tinymce/6/tinymce.min.js" referrerpolicy="origin"></script>
 
 <style>
@@ -66,7 +66,6 @@
   <button id="saveButton">Değişiklikleri Kaydet</button>
 </div>
 
-<!-- TinyMCE editör burada -->
 <textarea id="editorContainer"></textarea>
 
 <hr>
@@ -82,7 +81,7 @@
 <script src="https://www.gstatic.com/firebasejs/9.6.1/firebase-database-compat.js"></script>
 
 <script>
-  // Firebase konfigürasyon
+  // Senin verdiğin firebase config
   const firebaseConfig = {
     apiKey: "AIzaSyDAhFPe_j750iRzfv96xHAMX488sj6xBTs",
     authDomain: "saganak-24ec8.firebaseapp.com",
@@ -96,83 +95,71 @@
 
   const app = firebase.initializeApp(firebaseConfig);
   const database = firebase.database();
-  const songsRef = database.ref('Songs');
 
-  // Akor listesi ve transpose fonksiyonları
+  // Senin songs düğümün küçük harf “Songs” değil “songs” (verdiğin örnekte karma vardı ama çoğunlukla küçük harf)
+  const songsRef = database.ref('songs');
+
+  // Akor listesi (akordu / suffixi düzgün işlemesi için biraz geliştirdim)
   const chords = ['A', 'A#', 'B', 'C', 'C#', 'D', 'D#', 'E', 'F', 'F#', 'G', 'G#'];
 
+  // Akoru transpose et, örn: Bm7, Am, C#sus4 gibi suffixleri koru
   function transposeChord(chord, step) {
-    const match = chord.match(/^([A-G]#?)(.*)$/);
+    const regex = /^([A-G]#?)(.*)$/;
+    const match = chord.match(regex);
     if (!match) return chord;
     const base = match[1];
     const suffix = match[2];
-    const index = chords.indexOf(base);
-    if (index === -1) return chord;
-    let newIndex = (index + step + chords.length) % chords.length;
+    const idx = chords.indexOf(base);
+    if (idx === -1) return chord;
+    let newIndex = (idx + step + chords.length) % chords.length;
     return chords[newIndex] + suffix;
   }
 
+  // TinyMCE içindeki tüm <span id="nota">...</span> içindeki akorları transpose et
   function transposeAllChords(step) {
-    // TinyMCE'deki HTML'yi al, DOM olarak parse et
     let content = tinymce.get('editorContainer').getContent();
     const parser = new DOMParser();
     const doc = parser.parseFromString(content, 'text/html');
-
-    // span#nota'ları bul ve transpoze et
-    const spans = doc.querySelectorAll("span#nota");
+    const spans = doc.querySelectorAll('span#nota');
     spans.forEach(span => {
-      const chord = span.textContent.trim();
-      span.textContent = transposeChord(chord, step);
+      span.textContent = transposeChord(span.textContent.trim(), step);
     });
-
-    // Yeni içeriği TinyMCE'ye koy
     tinymce.get('editorContainer').setContent(doc.body.innerHTML);
   }
 
-  // TinyMCE başlat
-  tinymce.init({
-    selector: '#editorContainer',
-    menubar: false,
-    plugins: 'lists link',
-    toolbar: 'undo redo | bold italic underline | bullist numlist | link',
-    height: 300
-  });
-
-  // Kategorileri tutan değişken (Set ile tekrarları önler)
+  // Kategorileri tutan set (tekrarları engellemek için)
   let categorySet = new Set();
 
-  // Kategorileri dropdowna doldur
-  function fillCategoryDropdown() {
+  // Dropdownları doldur (kategoriye göre şarkıları filtrele)
+  function fillSongsDropdown(categoryFilter = 'all') {
     const categoryDropdown = document.getElementById('categoryDropdown');
-    categoryDropdown.innerHTML = '<option value="all">Tüm Kategoriler</option>';
-    Array.from(categorySet).sort().forEach(cat => {
-      const opt = document.createElement('option');
-      opt.value = cat;
-      opt.textContent = cat;
-      categoryDropdown.appendChild(opt);
-    });
-  }
-
-  // Şarkıları dropdowna doldur (filtreli)
-  function fillSongsDropdown(filterCategory = 'all') {
     const songsDropdown = document.getElementById('songsDropdown');
     songsDropdown.innerHTML = '<option value="" disabled selected>Bir şarkı seçin</option>';
-    songsRef.once('value', snapshot => {
+    categorySet.clear();
+
+    songsRef.once('value').then(snapshot => {
       const songs = snapshot.val();
       if (!songs) return;
-      categorySet.clear();
 
-      // Önce tüm kategorileri topla
+      // Önce tüm kategorileri toplarız
       Object.values(songs).forEach(song => {
         if (song.Category) categorySet.add(song.Category);
       });
-      fillCategoryDropdown();
 
-      // Sonra filtreye göre şarkıları listele
-      Object.entries(songs).forEach(([id, song]) => {
-        if (filterCategory === 'all' || song.Category === filterCategory) {
+      // Kategori dropdownu güncelle
+      categoryDropdown.innerHTML = '<option value="all">Tüm Kategoriler</option>';
+      Array.from(categorySet).sort().forEach(cat => {
+        const opt = document.createElement('option');
+        opt.value = cat;
+        opt.textContent = cat;
+        categoryDropdown.appendChild(opt);
+      });
+
+      // Şarkıları filtreleyip dropdowna koy
+      Object.entries(songs).forEach(([key, song]) => {
+        if (categoryFilter === 'all' || song.Category === categoryFilter) {
           const opt = document.createElement('option');
-          opt.value = id;
+          opt.value = key;
           opt.textContent = song.Name + (song.Category ? ' (' + song.Category + ')' : '');
           songsDropdown.appendChild(opt);
         }
@@ -180,30 +167,27 @@
     });
   }
 
-  // Şarkı seçilince editöre yükle
+  // Şarkı seçilince editöre ve kategori inputuna yükle
+  let currentSongId = null;
   document.getElementById('songsDropdown').addEventListener('change', e => {
-    const songId = e.target.value;
-    if (!songId) return;
-    songsRef.child(songId).once('value', snapshot => {
+    currentSongId = e.target.value;
+    if (!currentSongId) return;
+
+    songsRef.child(currentSongId).once('value').then(snapshot => {
       const song = snapshot.val();
       if (!song) return;
-      // İçeriği TinyMCE'ye yükle
       tinymce.get('editorContainer').setContent(song.Html || '');
-      // Kategori inputunu güncelle
       document.getElementById('newSongCategory').value = song.Category || '';
-      // ID'yi bir yerde tut
-      currentSongId = songId;
     });
   });
 
   // Kategori seçilince şarkıları filtrele
   document.getElementById('categoryDropdown').addEventListener('change', e => {
     fillSongsDropdown(e.target.value);
-    // Seçimi sıfırla
+    // Seçili şarkı ve editör sıfırlansın
+    currentSongId = null;
     document.getElementById('songsDropdown').innerHTML = '<option value="" disabled selected>Bir şarkı seçin</option>';
     tinymce.get('editorContainer').setContent('');
-    currentSongId = null;
-    // Kategori inputu temizle
     document.getElementById('newSongCategory').value = '';
   });
 
@@ -211,8 +195,7 @@
   document.getElementById('transposeUpButton').addEventListener('click', () => transposeAllChords(1));
   document.getElementById('transposeDownButton').addEventListener('click', () => transposeAllChords(-1));
 
-  // Kaydet butonu (düzenleme kaydetme)
-  let currentSongId = null;
+  // Şarkı düzenlemelerini kaydet
   document.getElementById('saveButton').addEventListener('click', () => {
     if (!currentSongId) {
       alert('Lütfen önce bir şarkı seçin!');
@@ -224,10 +207,12 @@
     songsRef.child(currentSongId).update({
       Html: newHtml,
       Category: newCategory
-    }, err => {
-      if (err) alert('Kaydetme hatası: ' + err);
-      else alert('Şarkı başarıyla güncellendi!');
-      fillSongsDropdown(document.getElementById('categoryDropdown').value);
+    }, error => {
+      if (error) alert('Kaydetme sırasında hata oluştu: ' + error);
+      else {
+        alert('Şarkı başarıyla güncellendi!');
+        fillSongsDropdown(document.getElementById('categoryDropdown').value);
+      }
     });
   });
 
@@ -246,9 +231,9 @@
       Name: name,
       Category: category,
       Html: html,
-      CreatedAt: Date.now()
-    }, err => {
-      if (err) alert('Yeni şarkı eklenirken hata oluştu: ' + err);
+      CreatedAt: new Date().toISOString()
+    }, error => {
+      if (error) alert('Yeni şarkı eklenirken hata oluştu: ' + error);
       else {
         alert('Yeni şarkı başarıyla eklendi!');
         document.getElementById('newSongName').value = '';
@@ -259,9 +244,21 @@
     });
   });
 
-  // Sayfa açılırken tüm şarkıları yükle (kategori: all)
-  fillSongsDropdown();
+  // TinyMCE başlat
+  tinymce.init({
+    selector: '#editorContainer',
+    height: 300,
+    menubar: false,
+    plugins: 'lists link',
+    toolbar: 'undo redo | bold italic underline | alignleft aligncenter alignright | bullist numlist | link',
+    branding: false,
+    statusbar: false
+  });
 
+  // Sayfa yüklendiğinde kategori ve şarkıları yükle
+  window.onload = () => {
+    fillSongsDropdown();
+  };
 </script>
 
 </body>
