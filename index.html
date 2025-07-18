@@ -250,4 +250,19 @@
     }, err => {
       if (err) alert('Yeni şarkı eklenirken hata oluştu: ' + err);
       else {
-        alert
+        alert('Yeni şarkı başarıyla eklendi!');
+        document.getElementById('newSongName').value = '';
+        document.getElementById('newSongCategory').value = '';
+        document.getElementById('newSongHtml').value = '';
+        fillSongsDropdown(document.getElementById('categoryDropdown').value);
+      }
+    });
+  });
+
+  // Sayfa açılırken tüm şarkıları yükle (kategori: all)
+  fillSongsDropdown();
+
+</script>
+
+</body>
+</html>
