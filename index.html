@@ -13,24 +13,25 @@
     h1 {
       color: #333;
     }
+    select, input[type="text"], textarea, button {
+      font-size: 16px;
+    }
     select, input[type="text"], textarea {
       width: 100%;
       padding: 8px;
       margin: 6px 0 12px;
-      font-size: 16px;
       border-radius: 4px;
       border: 1px solid #ddd;
       box-sizing: border-box;
     }
     button {
-      padding: 8px 12px;
-      margin: 3px 6px 12px 0;
+      padding: 10px 16px;
+      margin: 6px 6px 12px 0;
       background-color: #28a745;
       color: white;
       border: none;
       border-radius: 5px;
       cursor: pointer;
-      user-select: none;
     }
     button:hover {
       background-color: #218838;
@@ -59,13 +60,11 @@
     label {
       font-weight: bold;
     }
-    #toneButtons {
-      margin-bottom: 12px;
-    }
-    #toneButtons button {
+    #rootButtons button {
       background-color: #007bff;
+      margin: 2px;
     }
-    #toneButtons button.active {
+    #rootButtons button.selected {
       background-color: #0056b3;
     }
   </style>
@@ -88,14 +87,20 @@
       <option value="" disabled selected>Bir şarkı seçin</option>
     </select>
 
-    <div id="toneButtons" title="Şarkının tonunu seçin">
-      <!-- Ton butonları buraya JS ile gelecek -->
+    <div style="margin-top: 10px;">
+      <strong>Ton Seç (Root):</strong>
+      <div id="rootButtons" style="margin-top:5px;"></div>
     </div>
 
     <button id="transposeUpButton">1 Ton Yukarı</button>
     <button id="transposeDownButton">1 Ton Aşağı</button>
     <button id="saveButton">Şarkı Düzenlemeyi Kaydet</button>
 
+    <label style="margin-top: 12px; font-weight: bold;" for="editSongCategory">Seçili Şarkı Kategorisi:</label>
+    <select id="editSongCategory">
+      <option value="" disabled selected>Kategori seçin</option>
+    </select>
+    
     <div id="songHtmlContainer" contenteditable="true"></div>
   </div>
 
@@ -107,11 +112,6 @@
     <label for="newSongCategory">Kategori Seç:</label>
     <select id="newSongCategory">
       <option value="" disabled selected>Kategori seçin</option>
-    </select>
-
-    <label for="newSongRoot">Kök Ton (Root Note):</label>
-    <select id="newSongRoot">
-      <!-- Tüm tonlar burada olacak -->
     </select>
 
     <label for="newSongHtml">Akorlar ve Şarkı Sözleri (HTML formatında):</label>
@@ -147,7 +147,7 @@
   const categoriesRef = database.ref('Categories');
   const songsRef = database.ref('Songs');
   const currentSelectedSongRef = database.ref('CurrentSelectedSong');
-
+  
   // HTML elementler
   const categoryFilter = document.getElementById('categoryFilter');
   const newSongCategory = document.getElementById('newSongCategory');
@@ -161,211 +161,197 @@
   const addSongButton = document.getElementById('addSongButton');
   const newCategoryInput = document.getElementById('newCategoryInput');
   const addCategoryButton = document.getElementById('addCategoryButton');
-  const newSongRoot = document.getElementById('newSongRoot');
-  const toneButtonsDiv = document.getElementById('toneButtons');
+  const editSongCategory = document.getElementById('editSongCategory');
+  const rootButtonsDiv = document.getElementById('rootButtons');
 
   let currentSongId = null;
   let currentSongData = null;
-  let currentRoot = null; // Seçili şarkının kök tonu
+  let allSongs = {};
+  let allCategories = {};
 
-  // Tüm yarım ton dizisi (enharmonikler dahil değil, eşdeğerleri tek olarak yazdım)
-  // Ayrıca Db=C#, Eb=D#, Gb=F#, Ab=G#, Bb=A# kabul edildi.
-  const tones = ['C', 'C#', 'D', 'D#', 'E', 'F', 'F#', 'G', 'G#', 'A', 'A#', 'B'];
+  // Tüm kök tonları
+  const rootNotes = ['C', 'C#', 'Db', 'D', 'D#', 'Eb', 'E', 'F', 'F#', 'Gb', 'G', 'G#', 'Ab', 'A', 'A#', 'Bb', 'B'];
 
-  // Akor listesi - temel akorlar ve ekler
-  // Bu liste sadece transpoze algoritması için temel tonları tanımlamakta
-  // Transpose fonksiyonu akorun kök notasını bu dizide arar, geri kalan kısımlar korunur.
-  // Örneğin "Bm7" -> "B" kısmı bulunur, "m7" korunur.
-  // Minör, 7li, dim, sus4 gibi eklentiler korunur.
-  // Bu sayede çoğu akor transpoze edilebilir.
-  // Karmaşık akorlar veya alternatif yazımlar eklenebilir ama bu temel hali çoğu iş görür.
+  // Akorlar transpoze için temel 12 nota ve varyasyonları
+  const noteMap = {
+    'C': 0,  'B#': 0,
+    'C#': 1, 'Db': 1,
+    'D': 2,
+    'D#': 3, 'Eb': 3,
+    'E': 4,  'Fb': 4,
+    'F': 5,  'E#': 5,
+    'F#': 6, 'Gb': 6,
+    'G': 7,
+    'G#': 8, 'Ab': 8,
+    'A': 9,
+    'A#': 10,'Bb': 10,
+    'B': 11, 'Cb': 11
+  };
 
-  // Regex ile akor kök notası ve geri kalan kısmı ayıracağız.
+  // Note dizisi indeksine göre nota adı alma (sharp tercihli)
+  const indexToNoteSharp = ['C','C#','D','D#','E','F','F#','G','G#','A','A#','B'];
 
-  // Fonksiyonlar:
+  // Akoru transpoze eden fonksiyon - profesyonel, kök notayı ve suffix'i ayrıştırır
+  function transposeChordFull(chord, steps) {
+    // Örnek akorlar: Am, Bm7, C#maj7, Dbm, G7, F#m, E7, Bdim, Csus4
+    const regex = /^([A-G](#|b)?)(.*)$/;
+    const match = chord.match(regex);
+    if (!match) return chord;
 
-  // Kök notaları transpoze eden fonksiyon
-  function transposeChordRoot(root, steps) {
-    let index = tones.indexOf(root);
-    if (index === -1) return root; // Bulamazsa değiştirme
-    let newIndex = (index + steps) % tones.length;
-    if (newIndex < 0) newIndex += tones.length;
-    return tones[newIndex];
+    const root = match[1];
+    const suffix = match[3] || '';
+
+    let noteIndex = noteMap[root];
+    if (noteIndex === undefined) return chord;
+
+    let newIndex = (noteIndex + steps) % 12;
+    if (newIndex < 0) newIndex += 12;
+
+    // Yeni nota sharp gösterilir
+    let newRoot = indexToNoteSharp[newIndex];
+
+    return newRoot + suffix;
   }
 
-  // Akoru kök notası ve eklentisine ayıran regex
-  // Örnekler: A, Am, A7, A#m7, Bbmaj7, Gsus4, F#dim, Cadd9 ...
-  // Kök notası: A, A#, Bb, C, C# ...
-  // Eklenti: geri kalan
-  function splitChord(chord) {
-    const match = chord.match(/^([A-G](#|b)?)(.*)$/);
-    if (!match) return [chord, ''];
-    return [match[1], match[3]];
-  }
-
-  // Şarkı içindeki tüm akorları transpoze eden fonksiyon
-  // HTML içinde <span id='nota'> veya başka yerde olabilir.
-  // Şarkı HTML'sindeki akorları regex ile bulup değiştiriyoruz.
-  function transposeSong(html, steps) {
-    // Regex: Akorları bulmak için, harf ve sembollerden oluşan akorlar.
-    // Burada id='nota' span içinde akorlar olabilir.
-    // Basitçe <span id='nota' ...>Akorkodu</span> içindeki akorları değiştiriyoruz.
-    // Ayrıca başka yerlerdeki akorlar için de (\b akor \b) tarzı basit arama yapılabilir.
-
-    // Bu fonksiyon tüm akorları bulup transpoze eder.
-
-    return html.replace(/<span id=['"]nota['"][^>]*>([^<]+)<\/span>/gi, (match, chordText) => {
-      // Örneğin chordText = "Am", "C#", "G7" vb.
-      // Bunu parçala
-      let [root, suffix] = splitChord(chordText.trim());
-      let newRoot = transposeChordRoot(root, steps);
-      return `<span id='nota' style='font-weight: bold;'>${newRoot}${suffix}</span>`;
-    });
-  }
-
-  // Ton butonlarını oluştur
-  function createToneButtons() {
-    toneButtonsDiv.innerHTML = '';
-    tones.forEach(tone => {
-      const btn = document.createElement('button');
-      btn.textContent = tone;
-      btn.title = `Ton: ${tone}`;
-      btn.addEventListener('click', () => {
-        if (!currentRoot) {
-          alert('Önce bir şarkı seçin!');
-          return;
-        }
-        if (tone === currentRoot) return; // Aynı tona basılırsa işlem yok
-        const currentIndex = tones.indexOf(currentRoot);
-        const newIndex = tones.indexOf(tone);
-        const steps = newIndex - currentIndex;
-        const transposed = transposeSong(songHtmlContainer.innerHTML, steps);
-        songHtmlContainer.innerHTML = transposed;
-        currentRoot = tone;
-        updateActiveToneButton();
-      });
-      toneButtonsDiv.appendChild(btn);
-    });
-  }
-
-  function updateActiveToneButton() {
-    const buttons = toneButtonsDiv.querySelectorAll('button');
-    buttons.forEach(btn => {
-      if (btn.textContent === currentRoot) {
-        btn.classList.add('active');
-      } else {
-        btn.classList.remove('active');
-      }
+  // Şarkı içeriğindeki tüm akorları bulup transpoze eder
+  function transposeSongHtml(html, steps) {
+    // Akorlar <span id='nota' style='...'>Akor</span> şeklinde saklanıyor, bu span içindekini transpoze edeceğiz
+    // Regex ile tüm span içindeki akorları alıp değiştirelim
+    return html.replace(/(<span[^>]*id=['"]?nota['"]?[^>]*>)([^<]+)(<\/span>)/gi, (match, startTag, chordText, endTag) => {
+      const transposedChord = transposeChordFull(chordText.trim(), steps);
+      return startTag + transposedChord + endTag;
     });
   }
 
   // Kategorileri yükle ve dropdownları doldur
-  let allCategories = {};
-  categoriesRef.on('value', snapshot => {
-    const data = snapshot.val() || {};
-    allCategories = data;
+  function loadCategories() {
+    categoriesRef.on('value', snapshot => {
+      const data = snapshot.val() || {};
+      allCategories = data;
 
-    // Filtre dropdown doldur
-    categoryFilter.innerHTML = '<option value="">Tüm Kategoriler</option>';
-    newSongCategory.innerHTML = '<option value="" disabled selected>Kategori seçin</option>';
+      // Filtre dropdown doldur
+      categoryFilter.innerHTML = '<option value="">Tüm Kategoriler</option>';
+      newSongCategory.innerHTML = '<option value="" disabled selected>Kategori seçin</option>';
+      editSongCategory.innerHTML = '<option value="" disabled selected>Kategori seçin</option>';
 
-    for (const key in data) {
-      const catName = data[key];
-      categoryFilter.innerHTML += `<option value="${catName}">${catName}</option>`;
-      newSongCategory.innerHTML += `<option value="${catName}">${catName}</option>`;
-    }
-  });
-
-  // Ton dropdown doldur
-  function fillRootDropdown() {
-    newSongRoot.innerHTML = '';
-    tones.forEach(tone => {
-      newSongRoot.innerHTML += `<option value="${tone}">${tone}</option>`;
+      for (const key in data) {
+        const catName = data[key];
+        categoryFilter.innerHTML += `<option value="${catName}">${catName}</option>`;
+        newSongCategory.innerHTML += `<option value="${catName}">${catName}</option>`;
+        editSongCategory.innerHTML += `<option value="${catName}">${catName}</option>`;
+      }
     });
   }
-  fillRootDropdown();
 
   // Şarkıları yükle, kategori filtresine göre filtrele ve dropdowna ekle
-  let allSongs = {};
-  songsRef.on('value', snapshot => {
-    const data = snapshot.val() || {};
-    allSongs = data;
-
-    // Dropdown temizle
-    songsDropdown.innerHTML = '<option value="" disabled selected>Bir şarkı seçin</option>';
-
-    for (const songId in data) {
-      const song = data[songId];
-      // Kategori filtre varsa uygunsa göster, yoksa tümünü göster
-      if (!categoryFilter.value || (song.Category && song.Category === categoryFilter.value)) {
-        songsDropdown.innerHTML += `<option value="${songId}">${song.Name}</option>`;
-      }
-    }
-  });
-
-  // Şarkı seçildiğinde veriyi göster ve içerik editöre yaz
-  songsDropdown.addEventListener('change', e => {
-    const songId = e.target.value;
-    if (!songId) return;
-    currentSelectedSongRef.set(songId); // Gerçek zamanlı seçimi güncelle
-  });
-
-  // Firebase üzerinden gerçek zamanlı şarkı seçimi dinleme
-  currentSelectedSongRef.on('value', snapshot => {
-    const songId = snapshot.val();
-    if (!songId) return;
-
-    if (songsDropdown.value !== songId) {
-      songsDropdown.value = songId;
-
-      songsRef.child(songId).once('value').then(songSnap => {
-        const song = songSnap.val();
-        if (!song) return;
-        currentSongId = songId;
-        currentSongData = song;
-        currentRoot = song.Root || tones[0]; // Kök tonu yoksa C yap
-
-        // Şarkı HTML'ine başlığa şarkı adını ekle (bold)
-        const titleHtml = `<h2 class="song-title">${song.Name}</h2>`;
-        songHtmlContainer.innerHTML = titleHtml + (song.Html || '');
-
-        // Kök tonu aktif ton butonunda göster
-        updateActiveToneButton();
-
-        // Seçili kategoriyi güncelle
-        if (song.Category && Object.values(allCategories).includes(song.Category)) {
-          categoryFilter.value = song.Category;
-        } else {
-          categoryFilter.value = '';
-        }
-      });
-    }
-  });
-
-  // Kategori filtreleme değişince şarkıları filtrele
-  categoryFilter.addEventListener('change', e => {
-    // Seçilen kategoriye göre şarkıları filtrele
-    songsRef.once('value').then(snapshot => {
+  function loadSongs(filterCategory = '') {
+    songsRef.on('value', snapshot => {
       const data = snapshot.val() || {};
+      allSongs = data;
+
       songsDropdown.innerHTML = '<option value="" disabled selected>Bir şarkı seçin</option>';
 
       for (const songId in data) {
         const song = data[songId];
-        if (!categoryFilter.value || (song.Category && song.Category === categoryFilter.value)) {
+        if (!filterCategory || (song.Category && song.Category === filterCategory)) {
           songsDropdown.innerHTML += `<option value="${songId}">${song.Name}</option>`;
         }
       }
     });
+  }
+
+  // Seçili şarkının kök notasını rootButtons'da seçili göster
+  function setSelectedRootButton(root) {
+    const buttons = rootButtonsDiv.querySelectorAll('button');
+    buttons.forEach(btn => {
+      btn.classList.toggle('selected', btn.textContent === root);
+    });
+  }
+
+  // Root butonlarını oluştur
+  function createRootButtons() {
+    rootButtonsDiv.innerHTML = '';
+    rootNotes.forEach(note => {
+      const btn = document.createElement('button');
+      btn.textContent = note;
+      btn.type = 'button';
+      btn.addEventListener('click', () => {
+        if (!currentSongId) {
+          alert('Önce bir şarkı seçin!');
+          return;
+        }
+        // Root güncelle
+        songsRef.child(currentSongId).update({ Root: note }).then(() => {
+          setSelectedRootButton(note);
+          // Transpoze işlemi yap
+          if (currentSongData && currentSongData.Root) {
+            const oldRootIndex = noteMap[currentSongData.Root];
+            const newRootIndex = noteMap[note];
+            if (oldRootIndex !== undefined && newRootIndex !== undefined) {
+              const diff = newRootIndex - oldRootIndex;
+              const transposedHtml = transposeSongHtml(songHtmlContainer.innerHTML, diff);
+              songHtmlContainer.innerHTML = transposedHtml;
+              currentSongData.Root = note;
+            }
+          }
+        }).catch(e => alert('Root güncellenirken hata: ' + e.message));
+      });
+      rootButtonsDiv.appendChild(btn);
+    });
+  }
+
+  // Şarkı seçildiğinde içeriği göster, root ve kategori ayarla
+  songsDropdown.addEventListener('change', e => {
+    const songId = e.target.value;
+    if (!songId) return;
+    currentSelectedSongRef.set(songId); // Gerçek zamanlı seçimi güncelle Firebase'e
   });
 
-  // Yeni şarkı ekleme işlemi
+  // Seçilen şarkıyı Firebase'den dinle ve göster
+  currentSelectedSongRef.on('value', async snapshot => {
+    const songId = snapshot.val();
+    if (!songId) return;
+
+    if (songsDropdown.value !== songId) songsDropdown.value = songId;
+
+    const songSnap = await songsRef.child(songId).once('value');
+    const song = songSnap.val();
+    if (!song) return;
+
+    currentSongId = songId;
+    currentSongData = song;
+
+    // Şarkı adı kalın başlık olarak göster
+    const titleHtml = `<h2 class="song-title">${song.Name}</h2>`;
+    songHtmlContainer.innerHTML = song.Html ? (song.Html.startsWith('<h2') ? song.Html : titleHtml + song.Html) : titleHtml;
+
+    // Root varsa root seç
+    if (song.Root && rootNotes.includes(song.Root)) {
+      setSelectedRootButton(song.Root);
+    } else {
+      setSelectedRootButton('');
+    }
+
+    // Kategori ayarla (edit dropdown)
+    if (song.Category && Object.values(allCategories).includes(song.Category)) {
+      editSongCategory.value = song.Category;
+    } else {
+      editSongCategory.value = "";
+    }
+  });
+
+  // Kategori filtre değişirse şarkıları yeniden yükle
+  categoryFilter.addEventListener('change', e => {
+    loadSongs(e.target.value);
+  });
+
+  // Yeni şarkı ekleme
   addSongButton.addEventListener('click', () => {
     const name = newSongName.value.trim();
     const category = newSongCategory.value;
-    const root = newSongRoot.value;
     const html = newSongHtml.value.trim();
 
-    if (!name || !category || !html || !root) {
+    if (!name || !category || !html) {
       alert("Lütfen tüm alanları doldurun!");
       return;
     }
@@ -374,32 +360,29 @@
     songsRef.child(newSongKey).set({
       Name: name,
       Category: category,
-      Root: root,
-      Html: html // HTML içine şarkı adını biz gösteriyoruz, burada ayrı tutuyoruz.
+      Html: `<h2 class="song-title">${name}</h2>\n${html}`,
+      Root: '' // Boş bırakabiliriz, Root'u fixMissingRoots ile güncelleriz
     }).then(() => {
       alert("Yeni şarkı eklendi!");
       newSongName.value = '';
       newSongCategory.value = '';
       newSongHtml.value = '';
-      newSongRoot.value = tones[0];
     }).catch(e => {
       alert("Hata oluştu: " + e.message);
     });
   });
 
-  // Yeni kategori ekleme işlemi
+  // Yeni kategori ekleme
   addCategoryButton.addEventListener('click', () => {
     const catName = newCategoryInput.value.trim();
     if (!catName) {
       alert("Kategori adı boş olamaz!");
       return;
     }
-    // Aynı kategori varsa ekleme
     if (Object.values(allCategories).includes(catName)) {
       alert("Bu kategori zaten var!");
       return;
     }
-    // Firebase'e kategori ekle
     categoriesRef.push(catName).then(() => {
       alert("Kategori eklendi!");
       newCategoryInput.value = '';
@@ -408,7 +391,7 @@
     });
   });
 
-  // Şarkı düzenlemesi kaydetme (HTML ve kategori ve root da kaydet)
+  // Şarkı düzenlemesi kaydetme (HTML ve kategori)
   saveButton.addEventListener('click', () => {
     if (!currentSongId) {
       alert("Önce bir şarkı seçin!");
@@ -419,54 +402,82 @@
       alert("Şarkı içeriği boş olamaz!");
       return;
     }
-    // Kategoriyi al (filter dropdown'dan)
-    const cat = categoryFilter.value || null;
-    // Root tonu da güncelle (active ton butonundan)
-    const root = currentRoot || tones[0];
+    const selectedCategory = editSongCategory.value || null;
 
     songsRef.child(currentSongId).update({
       Html: editedHtml,
-      Category: cat,
-      Root: root
+      Category: selectedCategory
     }).then(() => {
       alert("Şarkı güncellendi!");
+      if(currentSongData) currentSongData.Category = selectedCategory;
     }).catch(e => {
       alert("Güncellerken hata: " + e.message);
     });
   });
 
-  // Ton transpoze butonları (1 ton yukarı aşağı)
+  // Ton transpoze butonları
   transposeUpButton.addEventListener('click', () => {
-    if (!currentRoot) {
+    if (!currentSongData) {
       alert("Önce bir şarkı seçin!");
       return;
     }
-    const currentIndex = tones.indexOf(currentRoot);
-    const newIndex = (currentIndex + 1) % tones.length;
-    const newTone = tones[newIndex];
-    const transposed = transposeSong(songHtmlContainer.innerHTML, 1);
+    const transposed = transposeSongHtml(songHtmlContainer.innerHTML, +1);
     songHtmlContainer.innerHTML = transposed;
-    currentRoot = newTone;
-    updateActiveToneButton();
   });
 
   transposeDownButton.addEventListener('click', () => {
-    if (!currentRoot) {
+    if (!currentSongData) {
       alert("Önce bir şarkı seçin!");
       return;
     }
-    const currentIndex = tones.indexOf(currentRoot);
-    let newIndex = currentIndex - 1;
-    if (newIndex < 0) newIndex = tones.length - 1;
-    const newTone = tones[newIndex];
-    const transposed = transposeSong(songHtmlContainer.innerHTML, -1);
+    const transposed = transposeSongHtml(songHtmlContainer.innerHTML, -1);
     songHtmlContainer.innerHTML = transposed;
-    currentRoot = newTone;
-    updateActiveToneButton();
   });
 
-  // Başlangıçta ton butonlarını oluştur
-  createToneButtons();
+  // Eksik root bilgilerini şarkılardan otomatik tamamla
+  async function fixMissingRoots() {
+    const snapshot = await songsRef.once('value');
+    const songs = snapshot.val() || {};
+
+    // İlk akoru HTML'den bul (span#nota içindeki ilk akor)
+    function extractFirstChord(html) {
+      // Örnek: <span id="nota">Am</span> veya başka span yapısı olabilir
+      const regex = /<span[^>]*id=['"]?nota['"]?[^>]*>([^<]+)<\/span>/i;
+      const match = html.match(regex);
+      return match ? match[1].trim() : null;
+    }
+
+    // Kök akoru alma (Am -> A, D#m7 -> D#)
+    function getBaseRootFromChord(chord) {
+      const m = chord.match(/^([A-G](#|b)?)/);
+      return m ? m[1] : null;
+    }
+
+    for (const [songId, song] of Object.entries(songs)) {
+      let root = song.Root;
+
+      if (!root || !/^([A-G](#|b)?)$/.test(root)) {
+        const firstChord = extractFirstChord(song.Html || '');
+        const baseRoot = firstChord ? getBaseRootFromChord(firstChord) : null;
+
+        if (baseRoot) {
+          console.log(`Şarkı: ${song.Name} için Root güncelleniyor: ${root} => ${baseRoot}`);
+          await songsRef.child(songId).update({ Root: baseRoot });
+        } else {
+          console.log(`Şarkı: ${song.Name} için Root bulunamadı.`);
+        }
+      } else {
+        console.log(`Şarkı: ${song.Name} için Root zaten var: ${root}`);
+      }
+    }
+    console.log("Root güncelleme işlemi tamamlandı.");
+  }
+
+  // Başlangıçta kategorileri ve şarkıları yükle
+  loadCategories();
+  loadSongs();
+  createRootButtons();
+  fixMissingRoots();
 
 </script>
 
