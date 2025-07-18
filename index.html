@@ -1,119 +1,328 @@
 <!DOCTYPE html>
 <html lang="tr">
 <head>
-  <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>Şarkı Düzenleyici - Contenteditable</title>
-  <style>
-    body {
-      font-family: Arial, sans-serif;
-      margin: 20px;
-      background-color: #f9f9f9;
-    }
-    #songHtmlContainer {
-      border: 1px solid #ccc;
-      min-height: 300px;
-      padding: 10px;
-      background-color: #fff;
-      margin-top: 20px;
-      overflow-y: auto;
-      white-space: pre-wrap;
-      font-size: 18px;
-      outline: none; /* focus efekti için */
-    }
-    select, input, button {
-      font-size: 16px;
-      margin: 5px 0;
-      padding: 8px;
-      width: 100%;
-      max-width: 400px;
-    }
-    button {
-      cursor: pointer;
-      background-color: #28a745;
-      color: white;
-      border: none;
-      border-radius: 4px;
-    }
-    button:disabled {
-      background-color: #999;
-      cursor: not-allowed;
-    }
-  </style>
-  <script src="https://www.gstatic.com/firebasejs/9.6.1/firebase-app-compat.js"></script>
-  <script src="https://www.gstatic.com/firebasejs/9.6.1/firebase-database-compat.js"></script>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Şarkı Yönetim Paneli</title>
+<style>
+  body {
+    font-family: Arial, sans-serif;
+    margin: 15px;
+    background-color: #f9f9f9;
+  }
+  select, input, textarea, button {
+    font-size: 16px;
+    padding: 8px;
+    margin: 5px 0 10px 0;
+    width: 100%;
+    box-sizing: border-box;
+  }
+  button {
+    cursor: pointer;
+    border: none;
+    background-color: #28a745;
+    color: white;
+    border-radius: 4px;
+  }
+  button:hover {
+    background-color: #218838;
+  }
+  #songHtmlContainer {
+    border: 1px solid #ccc;
+    background: white;
+    padding: 10px;
+    min-height: 200px;
+    margin-bottom: 20px;
+    overflow-y: auto;
+  }
+  h2.song-title {
+    font-weight: bold;
+    margin-bottom: 15px;
+  }
+  .flex-row {
+    display: flex;
+    gap: 10px;
+    flex-wrap: wrap;
+  }
+  .flex-row > * {
+    flex: 1;
+    min-width: 150px;
+  }
+  label {
+    font-weight: bold;
+  }
+</style>
+
+<!-- Firebase SDK -->
+<script src="https://www.gstatic.com/firebasejs/9.6.1/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/9.6.1/firebase-database-compat.js"></script>
 </head>
 <body>
-  <h1>Şarkı Seç / Düzenle / Kaydet</h1>
 
-  <select id="songsDropdown">
-    <option value="" disabled selected>Şarkı seçiniz</option>
-  </select>
+<h1>Şarkı Yönetim Paneli</h1>
 
-  <div id="songHtmlContainer" contenteditable="true" spellcheck="false"></div>
+<!-- Kategori Seçme -->
+<label for="categorySelect">Kategori Seç:</label>
+<select id="categorySelect">
+  <option value="">-- Tüm Kategoriler --</option>
+</select>
 
-  <button id="saveButton" disabled>Kaydet</button>
+<!-- Şarkı Seçme -->
+<label for="songsDropdown">Şarkı Seç:</label>
+<select id="songsDropdown">
+  <option value="" disabled selected>Bir şarkı seçin</option>
+</select>
 
-  <script>
-    // Firebase config (senin bilgilerinle değiştir)
-    const firebaseConfig = {
-      apiKey: "AIzaSyDAhFPe_j750iRzfv96xHAMX488sj6xBTs",
-      authDomain: "saganak-24ec8.firebaseapp.com",
-      databaseURL: "https://saganak-24ec8-default-rtdb.europe-west1.firebasedatabase.app",
-      projectId: "saganak-24ec8",
-      storageBucket: "saganak-24ec8.firebasestorage.app",
-      messagingSenderId: "394236997954",
-      appId: "1:394236997954:web:c49ebc99d98722e31b98db",
-      measurementId: "G-S1C78RYR9Z"
-    };
+<!-- Şarkı İçeriği Editable Alan -->
+<div id="songHtmlContainer" contenteditable="true" spellcheck="false"></div>
 
-    firebase.initializeApp(firebaseConfig);
-    const database = firebase.database();
+<!-- Ton Transpoze Butonları -->
+<div class="flex-row" style="max-width: 300px;">
+  <button id="transposeUpButton" type="button">1 Ton Yukarı</button>
+  <button id="transposeDownButton" type="button">1 Ton Aşağı</button>
+  <button id="saveEditButton" type="button" style="background-color:#007bff;">Düzenlemeyi Kaydet</button>
+</div>
 
-    const songsRef = database.ref('Songs');
-    const dropdown = document.getElementById('songsDropdown');
-    const songHtmlContainer = document.getElementById('songHtmlContainer');
-    const saveButton = document.getElementById('saveButton');
+<hr>
 
-    let currentSongId = null;
+<!-- Yeni Şarkı Ekleme Formu -->
+<h2>Yeni Şarkı Ekle</h2>
+<label for="newSongName">Şarkı Adı:</label>
+<input type="text" id="newSongName" placeholder="Şarkı adı girin" />
 
-    // Şarkıları dropdown'a yükle
-    function loadSongs() {
-      songsRef.once('value').then(snapshot => {
-        dropdown.innerHTML = '<option value="" disabled selected>Şarkı seçiniz</option>';
-        const songs = snapshot.val();
-        for (const id in songs) {
-          const opt = document.createElement('option');
-          opt.value = id;
-          opt.textContent = songs[id].Name;
-          dropdown.appendChild(opt);
+<label for="newSongCategory">Kategori Seç:</label>
+<select id="newSongCategory">
+  <option value="" disabled selected>Kategori seçin</option>
+</select>
+
+<label for="newSongHtml">Şarkı HTML İçeriği:</label>
+<textarea id="newSongHtml" rows="6" placeholder="Şarkı akor ve sözlerini HTML olarak girin"></textarea>
+
+<button id="addSongButton" type="button">Yeni Şarkıyı Ekle</button>
+
+<hr>
+
+<!-- Yeni Kategori Ekleme Formu -->
+<h2>Yeni Kategori Ekle</h2>
+<input type="text" id="newCategoryName" placeholder="Kategori adı girin" />
+<button id="addCategoryButton" type="button" style="background-color:#6c757d;">Kategori Ekle</button>
+
+<script>
+  // Firebase yapılandırma (sana ait bilgileri buraya koy)
+  const firebaseConfig = {
+    apiKey: "AIzaSyDAhFPe_j750iRzfv96xHAMX488sj6xBTs",
+    authDomain: "saganak-24ec8.firebaseapp.com",
+    databaseURL: "https://saganak-24ec8-default-rtdb.europe-west1.firebasedatabase.app",
+    projectId: "saganak-24ec8",
+    storageBucket: "saganak-24ec8.appspot.com",
+    messagingSenderId: "394236997954",
+    appId: "1:394236997954:web:c49ebc99d98722e31b98db",
+    measurementId: "G-S1C78RYR9Z"
+  };
+
+  firebase.initializeApp(firebaseConfig);
+  const database = firebase.database();
+
+  // Referanslar
+  const songsRef = database.ref('Songs');
+  const categoriesRef = database.ref('Categories');
+
+  // DOM elementleri
+  const categorySelect = document.getElementById('categorySelect');
+  const newSongCategory = document.getElementById('newSongCategory');
+  const songsDropdown = document.getElementById('songsDropdown');
+  const songHtmlContainer = document.getElementById('songHtmlContainer');
+  const newSongName = document.getElementById('newSongName');
+  const newSongHtml = document.getElementById('newSongHtml');
+  const newCategoryName = document.getElementById('newCategoryName');
+
+  let currentSongId = null;
+  let currentSongData = null;
+
+  // Akorlar (transpoze için)
+  const chords = ['A', 'A#', 'B', 'C', 'C#', 'D', 'D#', 'E', 'F', 'F#', 'G', 'G#'];
+
+  // Transpoze fonksiyonları
+  function transposeChord(chord, steps) {
+    const index = chords.indexOf(chord);
+    if (index === -1) return chord;
+    let newIndex = (index + steps) % chords.length;
+    if (newIndex < 0) newIndex += chords.length;
+    return chords[newIndex];
+  }
+
+  // Akorları span#nota içinde transpoze et
+  function transposeSongHtml(html, steps) {
+    const parser = new DOMParser();
+    const doc = parser.parseFromString(html, 'text/html');
+    const spans = doc.querySelectorAll('span#nota');
+
+    spans.forEach(span => {
+      let chordText = span.textContent.trim();
+      const match = chordText.match(/^([A-G]#?)(.*)$/);
+      if (match) {
+        const root = match[1];
+        const suffix = match[2];
+        const transposedRoot = transposeChord(root, steps);
+        span.textContent = transposedRoot + suffix;
+      }
+    });
+
+    return doc.body.innerHTML;
+  }
+
+  // Kategorileri yükle
+  function loadCategories() {
+    categoriesRef.once('value', snapshot => {
+      const cats = snapshot.val() || {};
+      categorySelect.innerHTML = '<option value="">-- Tüm Kategoriler --</option>';
+      newSongCategory.innerHTML = '<option value="" disabled selected>Kategori seçin</option>';
+      for (const key in cats) {
+        const cat = cats[key];
+        const opt1 = document.createElement('option');
+        opt1.value = cat.name;
+        opt1.textContent = cat.name;
+        categorySelect.appendChild(opt1);
+
+        const opt2 = document.createElement('option');
+        opt2.value = cat.name;
+        opt2.textContent = cat.name;
+        newSongCategory.appendChild(opt2);
+      }
+      loadSongs(categorySelect.value);
+    });
+  }
+
+  // Şarkıları yükle, kategoriye göre filtrele
+  function loadSongs(selectedCategory = '') {
+    songsDropdown.innerHTML = '<option value="" disabled selected>Bir şarkı seçin</option>';
+    songsRef.once('value', snapshot => {
+      const songs = snapshot.val() || {};
+      for (const key in songs) {
+        const song = songs[key];
+        if (!selectedCategory || song.Category === selectedCategory) {
+          const option = document.createElement('option');
+          option.value = key;
+          option.textContent = song.Name;
+          songsDropdown.appendChild(option);
         }
-      });
+      }
+    });
+  }
+
+  // Şarkı seçilince göster
+  songsDropdown.addEventListener('change', e => {
+    const songId = e.target.value;
+    if (!songId) return;
+    songsRef.child(songId).once('value', snapshot => {
+      const song = snapshot.val();
+      if (!song) return;
+      currentSongId = songId;
+      currentSongData = song;
+      const titleHtml = `<h2 class="song-title">${song.Name}</h2>`;
+      songHtmlContainer.innerHTML = titleHtml + song.Html;
+    });
+  });
+
+  // Kategori seçince şarkıları filtrele
+  categorySelect.addEventListener('change', e => {
+    loadSongs(e.target.value);
+    // Seçim değişince şarkı içeriğini temizle
+    currentSongId = null;
+    currentSongData = null;
+    songsDropdown.value = "";
+    songHtmlContainer.innerHTML = "";
+  });
+
+  // Ton yukarı transpoze
+  document.getElementById('transposeUpButton').addEventListener('click', () => {
+    if (!currentSongId) { alert("Önce bir şarkı seçin."); return; }
+    const newHtml = transposeSongHtml(songHtmlContainer.innerHTML, +1);
+    songHtmlContainer.innerHTML = newHtml;
+  });
+
+  // Ton aşağı transpoze
+  document.getElementById('transposeDownButton').addEventListener('click', () => {
+    if (!currentSongId) { alert("Önce bir şarkı seçin."); return; }
+    const newHtml = transposeSongHtml(songHtmlContainer.innerHTML, -1);
+    songHtmlContainer.innerHTML = newHtml;
+  });
+
+  // Düzenlenen şarkıyı kaydet
+  document.getElementById('saveEditButton').addEventListener('click', () => {
+    if (!currentSongId) { alert("Önce bir şarkı seçin."); return; }
+    let htmlContent = songHtmlContainer.innerHTML;
+
+    // Başlığı ve içeriği ayır (başlık dışarıda kalmalı)
+    // Başlık <h2 class="song-title">...</h2> olarak eklenmiş, onu çıkarıyoruz kaydederken:
+    const tempDiv = document.createElement('div');
+    tempDiv.innerHTML = htmlContent;
+    const h2 = tempDiv.querySelector('h2.song-title');
+    if (h2) h2.remove();
+    const cleanedHtml = tempDiv.innerHTML.trim();
+
+    // Güncelle Firebase'de
+    songsRef.child(currentSongId).update({
+      Html: cleanedHtml
+    }).then(() => {
+      alert("Şarkı içeriği başarıyla kaydedildi.");
+      currentSongData.Html = cleanedHtml;
+    }).catch(err => alert("Kaydetme hatası: " + err.message));
+  });
+
+  // Yeni kategori ekle
+  document.getElementById('addCategoryButton').addEventListener('click', () => {
+    const name = newCategoryName.value.trim();
+    if (!name) {
+      alert("Kategori adı boş olamaz!");
+      return;
     }
 
-    // Şarkı seçilince içeriği yükle
-    dropdown.addEventListener('change', () => {
-      currentSongId = dropdown.value;
-      if (!currentSongId) return;
-      songsRef.child(currentSongId).once('value').then(snapshot => {
-        const song = snapshot.val();
-        songHtmlContainer.innerHTML = song.Html || '';
-        saveButton.disabled = false;
-      });
+    // Aynı isimden varsa uyar
+    categoriesRef.orderByChild('name').equalTo(name).once('value', snapshot => {
+      if (snapshot.exists()) {
+        alert("Bu isimde bir kategori zaten var.");
+      } else {
+        const newKey = categoriesRef.push().key;
+        categoriesRef.child(newKey).set({ name }).then(() => {
+          alert("Kategori eklendi.");
+          newCategoryName.value = "";
+          loadCategories();
+        }).catch(err => alert("Kategori ekleme hatası: " + err.message));
+      }
     });
+  });
 
-    // Kaydetme fonksiyonu
-    saveButton.addEventListener('click', () => {
-      if (!currentSongId) return alert('Önce bir şarkı seçin');
-      const updatedHtml = songHtmlContainer.innerHTML;
-      songsRef.child(currentSongId).update({ Html: updatedHtml })
-        .then(() => alert('Şarkı kaydedildi!'))
-        .catch(err => alert('Kaydederken hata: ' + err.message));
-    });
+  // Yeni şarkı ekle
+  document.getElementById('addSongButton').addEventListener('click', () => {
+    const name = newSongName.value.trim();
+    const category = newSongCategory.value;
+    const html = newSongHtml.value.trim();
 
-    // Başlangıçta şarkıları yükle
-    loadSongs();
+    if (!name || !category || !html) {
+      alert("Lütfen şarkı adı, kategori ve içerik girin.");
+      return;
+    }
 
-  </script>
+    // Yeni şarkıyı Firebase'e ekle
+    const newKey = songsRef.push().key;
+    songsRef.child(newKey).set({
+      Name: name,
+      Category: category,
+      Html: html
+    }).then(() => {
+      alert("Yeni şarkı eklendi.");
+      newSongName.value = "";
+      newSongHtml.value = "";
+      newSongCategory.value = "";
+      loadSongs(categorySelect.value);
+    }).catch(err => alert("Şarkı ekleme hatası: " + err.message));
+  });
+
+  // Sayfa yüklenince kategorileri ve şarkıları yükle
+  loadCategories();
+
+</script>
+
 </body>
 </html>
