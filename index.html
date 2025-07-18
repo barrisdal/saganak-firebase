@@ -102,11 +102,12 @@
       <div id="rootButtons" style="margin-top:5px;"></div>
     </div>
 
-   
+    <button id="transposeUpButton">1 Ton Yukarı</button>
+    <button id="transposeDownButton">1 Ton Aşağı</button>
     <button id="saveButton">Şarkı Düzenlemeyi Kaydet</button>
     <a href="#" id="deleteSongLink">🗑️ Bu Şarkıyı Sil</a>
 
-    <br><label style="margin-top: 12px; font-weight: bold;" for="editSongCategory">Seçili Şarkı Kategorisi:</label>
+    <label style="margin-top: 12px; font-weight: bold;" for="editSongCategory">Seçili Şarkı Kategorisi:</label>
     <select id="editSongCategory">
       <option value="" disabled selected>Kategori seçin</option>
     </select>
@@ -215,9 +216,9 @@
       editSongCategory.innerHTML = '<option value="" disabled selected>Kategori seçin</option>';
       for (const key in data) {
         const catName = data[key];
-        categoryFilter.innerHTML += `<option value="${catName}">${catName}</option>`;
-        newSongCategory.innerHTML += `<option value="${catName}">${catName}</option>`;
-        editSongCategory.innerHTML += `<option value="${catName}">${catName}</option>`;
+        categoryFilter.innerHTML += <option value="${catName}">${catName}</option>;
+        newSongCategory.innerHTML += <option value="${catName}">${catName}</option>;
+        editSongCategory.innerHTML += <option value="${catName}">${catName}</option>;
       }
     });
   }
@@ -230,7 +231,7 @@
       for (const songId in data) {
         const song = data[songId];
         if (!filterCategory || (song.Category && song.Category === filterCategory)) {
-          songsDropdown.innerHTML += `<option value="${songId}">${song.Name}</option>`;
+          songsDropdown.innerHTML += <option value="${songId}">${song.Name}</option>;
         }
       }
     });
@@ -287,7 +288,7 @@
     if (!song) return;
     currentSongId = songId;
     currentSongData = song;
-    const titleHtml = `<h2 class="song-title">${song.Name}</h2>`;
+    const titleHtml = <h2 class="song-title">${song.Name}</h2>;
     songHtmlContainer.innerHTML = song.Html ? (song.Html.startsWith('<h2') ? song.Html : titleHtml + song.Html) : titleHtml;
     if (song.Root && rootNotes.includes(song.Root)) {
       setSelectedRootButton(song.Root);
@@ -317,7 +318,7 @@
     songsRef.child(newSongKey).set({
       Name: name,
       Category: category,
-      Html: `<h2 class="song-title">${name}</h2>\n${html}`,
+      Html: <h2 class="song-title">${name}</h2>\n${html},
       Root: ''
     }).then(() => {
       alert("Yeni şarkı eklendi!");
